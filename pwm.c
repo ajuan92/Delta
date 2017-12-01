@@ -5,7 +5,7 @@
 #include <sys/types.h>
 #include <string.h>
 #include <stdlib.h>
-#include <pwm.h>
+#include "pwm.h"
 
 #define PERIOD "/sys/class/pwm/pwmchipX/pwm0/period"
 #define DUTY_CYCLE "/sys/class/pwm/pwmchipX/pwm0/duty_cycle"
