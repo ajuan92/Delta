@@ -8,28 +8,34 @@
 #include <signal.h>
 #include <stdint.h>
 #include <pthread.h>
+#include "DeltaCon.h"
 
-#define MAX_CLIENT 5
+#define MAX_CLIENT 1
+
+typedef struct{
+        int sock;
+        pthread_t ClientTask;
+        int8_t ClientEnd;
+}DeltaC;
 
 
 void error(char *msg);
 void ExitApplication(int32_t Signal);
 void *vfnThread(void* newsockfd);
 
-volatile uint8_t ExitAppFlag = 0;
+volatile uint8_t ExitAppFlag;
+DeltaC tClient;
 
 int main(int argc, char *argv[]){
 
 int sockfd, newsockfd, portno;
 socklen_t clilen;
-//char buffer[256];
 struct sockaddr_in serv_addr, cli_addr;
-//int n;
-pthread_t thread[MAX_CLIENT];
-int ThreadIndex = 0;
+
+tClient.ClientEnd = 0;
 
 
-    (void)signal(SIGINT,ExitApplication);
+   (void)signal(SIGINT,ExitApplication);
     printf("Application started and signal callback registered\n\r");
     printf("Press CTRL+C to finish\n\r");
 
@@ -56,34 +62,42 @@ int ThreadIndex = 0;
        error("ERROR on binding");
     }
 
-    listen(sockfd,MAX_CLIENT);
+    listen(sockfd,-1);
     clilen = sizeof(cli_addr);
     
    while(1){
+          
+           newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);
+           if(newsockfd < 0){
+             error("ERROR on accept");
+           }
 
-        newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);
-        if(newsockfd < 0){
-           error("ERROR on accept");
-        }
-	printf("%d\n",ThreadIndex);	
+	if(tClient.ClientEnd == 0){
+            pthread_cancel(tClient.ClientTask);
+	   // write(*(int*)newsockfd,ServerMess,1);
+	   
 
-	if(MAX_CLIENT > thread[ThreadIndex]){
+	   tClient.ClientEnd = 1;
+	   printf("%d\n",tClient.ClientEnd);	
+	   tClient.sock = newsockfd;
+	   
 	   pthread_create(
-	      &thread[ThreadIndex],
+	      &tClient.ClientTask,
 	      NULL,
 	      vfnThread,
-	      &newsockfd);
-	   ThreadIndex++;
+	      &tClient.sock
+	   );
 	}else{
-	  error("Client limit reached");
+	   printf("%d",tClient.ClientEnd);
+	 //  write(*(int*)newsockfd,"Robot busy sorry try later",26);	  
+ 	   close(newsockfd);	
 	}
+
+
        
         if(ExitAppFlag == 1){
 	    printf("Ending Application...\n\r");
-	   
-	    for(ThreadIndex = 0;ThreadIndex < MAX_CLIENT;ThreadIndex++){
-	        pthread_cancel(thread[ThreadIndex]);	   
- 	    }
+	    pthread_cancel(tClient.ClientTask);
 	    pthread_exit(vfnThread); 
 	    close(sockfd);
             break;
@@ -95,21 +109,29 @@ return 0;
 void *vfnThread(void* newsockfd)
 {
     char buffer[256];
+    char ReplayBuffer[256];
     int RWStatus;
-
+    
     while(1){
         bzero(buffer,256);
-        RWStatus = read(*(int *)newsockfd,buffer,255);
+        RWStatus = read(*(int*)newsockfd,buffer,5);
         if(RWStatus < 0){
            error("ERROR reading from socket");
-        }else{
-        printf("Here is the message: %s\n",buffer);
-        RWStatus = write(*(int *)newsockfd,"I got your message",18);
+        }else if(RWStatus != 0){
+           printf("Here is the message: %d , %d , %d , %d, %d \n",
+		buffer[0],buffer[1],buffer[2],buffer[3],buffer[4]);
+
+           DeltaControl(buffer,ReplayBuffer);
+           RWStatus = write(*(int*)newsockfd,ReplayBuffer,255);
         }
-	if(RWStatus < 0){
-          error("ERROR writing to socket");
-         }
+	printf("%d",RWStatus);
+	if(RWStatus == 0){
+           close(tClient.sock);
+           tClient.ClientEnd = 0;
+           pthread_exit(NULL);
+        }
     }
+
 }
 
 void ExitApplication(int32_t Signal){

@@ -1,8 +1,8 @@
-LIBS = -lm
+LIBS = -lm -pthread
 CC = gcc
-CFLAGS = pwm.out  pwm.h  
-OUTPUT = DeltaK.out
-SOURCES = Deltak.c
+CFLAGS = -Wall -Werror  
+OUTPUT = Delta.out
+SOURCES = Server.c DeltaCon.c DeltaK.c pwm.c
 
 all:
 
